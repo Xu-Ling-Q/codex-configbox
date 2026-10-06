@@ -28,7 +28,13 @@
 
 ## 安装
 
+先安装同账号维护的 Provider Plus，使 `~/.codex/provider-plus/relay.py`、`17856` 管理端口和 `17857` relay 可用：
+
 ```powershell
+git clone https://github.com/Xu-Ling-Q/codex-provider-plus.git
+cd codex-provider-plus
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+
 git clone https://github.com/Xu-Ling-Q/codex-configbox.git
 cd codex-configbox
 ```
