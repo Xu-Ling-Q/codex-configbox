@@ -366,6 +366,40 @@ function Remove-CustomInstructionPath([string]$Path) {
   return @(Save-CustomInstructionPaths (@(Get-CustomInstructionPaths) | Where-Object { $_ -ne $Path }))
 }
 
+function Get-DiscoveredInstructionPaths() {
+  $roots = @(
+    @{ path = $CodexHome; recurse = $false },
+    @{ path = (Join-Path $CodexHome 'prompts'); recurse = $false },
+    @{ path = (Join-Path $CodexHome 'managed-prompts'); recurse = $true }
+  )
+  $found = New-Object System.Collections.Generic.List[string]
+  foreach ($entry in $roots) {
+    $root = [string]$entry.path
+    if ([string]::IsNullOrWhiteSpace($root)) { continue }
+    if (!(Test-Path -LiteralPath $root -PathType Container)) { continue }
+    try {
+      $items = if ([bool]$entry.recurse) {
+        Get-ChildItem -LiteralPath $root -File -Filter '*.md' -Recurse -ErrorAction SilentlyContinue
+      } else {
+        Get-ChildItem -LiteralPath $root -File -Filter '*.md' -ErrorAction SilentlyContinue
+      }
+      $items | ForEach-Object {
+        if ($_.Name -match '\.bak' -or $_.Name.StartsWith('.')) { return }
+        try { [void]$found.Add([IO.Path]::GetFullPath($_.FullName)) } catch {}
+      }
+    } catch {}
+  }
+  return @($found | Sort-Object -Unique)
+}
+
+function Get-InstructionPathCandidates() {
+  $all = @()
+  $all += @(Get-CustomInstructionPaths)
+  $all += @(Get-DiscoveredInstructionPaths)
+  return @($all | ForEach-Object { Normalize-ModelInstructionsPath ([string]$_) } |
+    Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
+}
+
 function Get-TopLevelString([string]$Text, [string]$Name) {
   $pattern = '(?m)^' + [regex]::Escape($Name) + '\s*=\s*(?:"((?:\\.|[^"\\])*)"|''([^'']*)'')\s*$'
   $m = [regex]::Match($Text, $pattern)
@@ -1757,15 +1791,24 @@ $instructionsUi = @'
   const baseForm = form;
   function mergeInstructionPaths(paths) {
     const select = document.getElementById('modelInstructionsFile');
+    if (!select) return;
     const customOption = [...select.options].find(option => option.value === '__custom__');
-    const list = Array.isArray(paths) ? paths : (typeof paths === 'string' && paths ? [paths] : []);
-    for (const value of list) {
-      const path = String(value || '').trim();
+    const flat = [];
+    (function push(value) {
+      if (Array.isArray(value)) { value.forEach(push); return; }
+      if (value === null || value === undefined) return;
+      const text = String(value).trim();
+      if (text) flat.push(text);
+    })(paths);
+    for (const path of flat) {
       if (!path || [...select.options].some(option => option.value === path)) continue;
       const label = path.split(/[\\/]/).pop() || path;
       select.insertBefore(new Option(label, path), customOption);
     }
   }
+  api('/api/instruction-paths').then(result => {
+    mergeInstructionPaths(result.merged || []);
+  }).catch(() => {});
 
   window.saveCustomInstructionsPath = async function() {
     const selectedPath = document.getElementById('modelInstructionsFile').value;
@@ -1963,12 +2006,21 @@ try {
       }
       if ($path -eq '/api/add-instruction-path') {
         $b = Read-BodyJson
-        Json ([ordered]@{ ok=$true; paths=,@(Add-CustomInstructionPath ([string]$b.path)) })
+        Json ([ordered]@{ ok=$true; paths=@(Add-CustomInstructionPath ([string]$b.path)) })
         continue
       }
       if ($path -eq '/api/remove-instruction-path') {
         $b = Read-BodyJson
-        Json ([ordered]@{ ok=$true; paths=,@(Remove-CustomInstructionPath ([string]$b.path)) })
+        Json ([ordered]@{ ok=$true; paths=@(Remove-CustomInstructionPath ([string]$b.path)) })
+        continue
+      }
+      if ($path -eq '/api/instruction-paths') {
+        Json ([ordered]@{
+          ok=$true
+          merged=@(Get-InstructionPathCandidates)
+          custom=@(Get-CustomInstructionPaths)
+          discovered=@(Get-DiscoveredInstructionPaths)
+        })
         continue
       }
       if ($path -eq '/api/sync-native-picker') {

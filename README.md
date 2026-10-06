@@ -55,8 +55,8 @@ cd codex-configbox
 ## 相关项目
 
 - [codex-keysmith](https://github.com/Jia-Ethan/codex-keysmith) - Codex 全局指令部署工具
-- [lpq6/codex-configbox](https://github.com/lpq6/codex-configbox) - 原始版本
-- [lpq6/codex-provider-plus](https://github.com/lpq6/codex-provider-plus) - Provider Plus 协议转换
+- [Xu-Ling-Q/codex-configbox](https://github.com/Xu-Ling-Q/codex-configbox) - ConfigBox 主仓库
+- [Xu-Ling-Q/codex-provider-plus](https://github.com/Xu-Ling-Q/codex-provider-plus) - Provider Plus 协议转换
 
 ## License
 
